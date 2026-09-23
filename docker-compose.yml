@@ -1,0 +1,51 @@
+version: "3.5"
+
+services:
+  kafka:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tcc-poc3-kafka:3.9.2
+    container_name: tcc-poc3-kafka
+    hostname: kafka
+    restart: unless-stopped
+    ports:
+      - "9092:9092"   # listener PLAINTEXT, consumido por chat_client.py e security_monitor.py
+    environment:
+      # --- Identidade do nó (single-node, modo combinado broker+controller) ---
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+
+      # --- Listeners (KRaft, sem Zookeeper) ---
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+
+      # --- Replicação (default do Kafka é 3; precisa cair para 1 em cluster de nó único) ---
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+
+      # --- Retenção "infinita" para viabilizar o backup contínuo e a
+      #     restauração de histórico (US05 do README) ---
+      KAFKA_LOG_RETENTION_HOURS: -1
+
+      # --- Criação automática de tópicos: chat-room-<chatid> e
+      #     security-logs são criados sob demanda pelos próprios clientes
+      #     Python na primeira publicação, sem etapa manual de provisionamento ---
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - poc3-net
+
+volumes:
+  kafka-data:
+
+networks:
+  poc3-net:
+    driver: bridge
