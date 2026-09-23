@@ -11,23 +11,23 @@ Este documento descreve o funcionamento interno da PoC: os módulos que a compõ
 ## Visão Geral dos Componentes
 
 ```text
-┌───────────────────────────────┐                       ┌───────────────────────────────┐
-│   chat_client.py (U-100)      │                       │   chat_client.py (U-200)      │
-│                                │                       │                                │
-│  ┌──────────┐   ┌───────────┐ │                        │ ┌──────────┐   ┌───────────┐ │
-│  │dlp_llm.py│   │crypto_aes │ │                        │ │dlp_llm.py│   │crypto_aes │ │
-│  │(inspeção)│   │(AES-GCM)  │ │                        │ │(inspeção)│   │(AES-GCM)  │ │
-│  └────┬─────┘   └─────┬─────┘ │                        │ └────┬─────┘   └─────┬─────┘ │
-└───────┼───────────────┼───────┘                        └───────┼───────────────┼───────┘
-        │ HTTP local     │ produce/consume                        │ HTTP local     │ produce/consume
-        ▼                ▼                                        ▼                ▼
-┌────────────────┐   ┌──────────────────────────────────────────────────────────┐
-│ Ollama          │   │                     Apache Kafka (broker)                │
-│ (llama3, local) │   │  tópico `chat-room-<chatid>`   tópico `security-logs`    │
-│ localhost:11434 │   │  (ciphertext + nonce + tag)    (metadados de auditoria)  │
-└────────────────┘   └───────────────────────────────────┬──────────────────────┘
-                                                           │ consume (security-logs)
-                                                           ▼
+┌───────────────────────────────┐                   ┌──────────────────────────────┐
+│   chat_client.py (U-100)      │                   │   chat_client.py (U-200)     │
+│                               │                   │                              │
+│  ┌──────────┐   ┌───────────┐ │                   │ ┌──────────┐   ┌───────────┐ │
+│  │dlp_llm.py│   │crypto_aes │ │                   │ │dlp_llm.py│   │crypto_aes │ │
+│  │(inspeção)│   │(AES-GCM)  │ │                   │ │(inspeção)│   │(AES-GCM)  │ │
+│  └────┬─────┘   └─────┬─────┘ │                   │ └────┬─────┘   └─────┬─────┘ │
+└───────┼───────────────┼───────┘                   └──────┼───────────────┼───────┘
+        │ HTTP local    │ produce/consume                  │ HTTP local    │ produce/consume
+        ▼               ▼                                  ▼               ▼
+┌─────────────────┐  ┌──────────────────────────────────────────────────────────┐
+│ Ollama          │  │                     Apache Kafka (broker)                │
+│ (llama3, local) │  │  tópico `chat-room-<chatid>`   tópico `security-logs`    │
+│ localhost:11434 │  │  (ciphertext + nonce + tag)    (metadados de auditoria)  │
+└─────────────────┘  └───────────────────────────────────┬──────────────────────┘
+                                                         │ consume (security-logs)
+                                                         ▼
                                                 ┌───────────────────────────┐
                                                 │  security_monitor.py      │
                                                 │  (terminal de auditoria)  │
