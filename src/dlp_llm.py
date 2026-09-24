@@ -92,6 +92,7 @@ def inspect_and_mask(
                 "model": model,
                 "prompt": _build_prompt(message),
                 "stream": False,
+                "options": {"temperature": 0.0},
             },
             timeout=timeout,
         )
