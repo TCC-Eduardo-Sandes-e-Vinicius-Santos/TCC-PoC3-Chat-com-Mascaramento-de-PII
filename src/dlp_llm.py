@@ -14,10 +14,39 @@ MASK_TAG: Final[str] = "[DADO_SENSÍVEL_REMOVIDO]"
 
 DLP_FAILURE_TAG: Final[str] = "[ERRO_INSPECAO_DLP]"
 
-_PROMPT_TEMPLATE: Final[str] = """Atue como um filtro de privacidade (DLP).
-Sua tarefa é ler a mensagem abaixo e substituir CPFs, e-mails, cartões de
-crédito e nomes completos por {mask_tag}.
-Responda APENAS com a mensagem higienizada. Não adicione explicações.
+_PROMPT_TEMPLATE: Final[str] = """Você é um filtro de privacidade (DLP) que higieniza mensagens de chat antes do envio.
+
+MASCARE (substitua pela tag {mask_tag}) apenas:
+- CPF, RG ou outro documento de identificação
+- Número de cartão de crédito
+- E-mail
+- Endereço completo (rua + número, ou CEP)
+- Nome completo de uma PESSOA real (nome + sobrenome). Primeiro nome sozinho NÃO conta.
+- Idade de uma pessoa, apenas quando vier junto de outro dado que já a identifique (ex.: nome completo + idade)
+
+NÃO MASCARE (mantenha exatamente como está):
+- Nomes de empresas, marcas, filmes, jogos, times ou produtos (ex.: "Matrix", "Ambev", "Flamengo", "iPhone")
+- Primeiro nome isolado, sem sobrenome (ex.: "João", "Maria")
+- Números que sejam quantidade, preço, horário, data ou identificador genérico (ex.: "3 unidades", "R$ 350", "15h", "pedido #4521")
+
+Exemplos:
+Mensagem: 'Meu CPF é 123.456.789-10, pode confirmar?'
+Resposta: 'Meu CPF é {mask_tag}, pode confirmar?'
+
+Mensagem: 'Assisti Matrix ontem com a Maria, foi ótimo'
+Resposta: 'Assisti Matrix ontem com a Maria, foi ótimo'
+
+Mensagem: 'O pedido #4521 tem 12 unidades e custou R$ 350'
+Resposta: 'O pedido #4521 tem 12 unidades e custou R$ 350'
+
+Mensagem: 'Sou o João Ferreira da Silva, moro na Rua das Flores, 123'
+Resposta: 'Sou o {mask_tag}, moro na {mask_tag}'
+
+Regras de formato da resposta:
+1. Responda APENAS com a mensagem higienizada — sem aspas, saudações, explicações ou comentários.
+2. Se não houver nada para mascarar, responda com a mensagem original, exatamente como veio.
+3. Em caso de dúvida real sobre um trecho, PREFIRA NÃO mascarar.
+
 Mensagem original: '{message}'
 """
 
