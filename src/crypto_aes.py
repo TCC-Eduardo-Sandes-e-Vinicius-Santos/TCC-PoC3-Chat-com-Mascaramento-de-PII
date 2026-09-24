@@ -93,11 +93,6 @@ def derive_shared_key(id_a: str, id_b: str) -> bytes:
 
 
 def encrypt(plaintext: str, key: bytes) -> EncryptedMessage:
-    """
-    Cifra `plaintext` (str, UTF-8) com AES-256-GCM usando `key` (32 bytes) e
-    um nonce aleatório novo a cada chamada. Retorna um `EncryptedMessage`
-    com ciphertext e nonce em base64, prontos para publicação no Kafka.
-    """
     _validate_key(key)
     if plaintext is None:
         raise CryptoAESError("plaintext não pode ser None.")
@@ -113,14 +108,6 @@ def encrypt(plaintext: str, key: bytes) -> EncryptedMessage:
 
 
 def decrypt(ciphertext_b64: str, nonce_b64: str, key: bytes) -> str:
-    """
-    Decifra e valida a autenticidade de uma mensagem cifrada com `encrypt()`.
-
-    Levanta `MessageIntegrityError` se a *tag* de autenticação do GCM não
-    conferir (mensagem adulterada, nonce incorreto ou chave errada) e
-    `CryptoAESError` para entradas malformadas (ex.: base64 inválido, chave
-    com tamanho incorreto).
-    """
     _validate_key(key)
 
     try:

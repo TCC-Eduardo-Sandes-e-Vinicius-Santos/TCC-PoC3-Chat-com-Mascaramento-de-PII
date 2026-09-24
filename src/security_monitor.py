@@ -86,8 +86,7 @@ class SecurityAlert:
 
 def parse_alert(raw_value: str) -> SecurityAlert:
     """
-    Faz o parsing e a validação de uma mensagem crua (já decodificada como
-    str) do tópico `security-logs`.
+    Faz o parsing e a validação de uma mensagem crua.
     """
     try:
         payload = json.loads(raw_value)
@@ -116,8 +115,7 @@ def build_consumer(
 
 def consume_once(consumer: Consumer, timeout: float = 5.0) -> Optional[SecurityAlert]:
     """
-    Consome uma única mensagem (com timeout, em segundos) e retorna o
-    `SecurityAlert` correspondente.
+    Consome uma única mensagem e retorna o `SecurityAlert` correspondente.
     """
     message = consumer.poll(timeout)
 
@@ -152,8 +150,7 @@ def consume_and_print(
     consumer: Optional[Consumer] = None,
 ) -> None:
     """
-    Consome o tópico `security-logs`
-    indefinidamente e imprime cada alerta válido no terminal.
+    Consome o tópico `security-logs` indefinidamente e imprime cada alerta válido.
     """
     owns_consumer = consumer is None
     consumer = consumer or build_consumer(bootstrap_servers)
@@ -164,7 +161,7 @@ def consume_and_print(
         SECURITY_LOGS_TOPIC,
         bootstrap_servers,
     )
-    print(f"=== Central de Monitoramento de Segurança — tópico '{SECURITY_LOGS_TOPIC}' ===")
+    print(f"=== Central de Monitoramento de Segurança -> tópico '{SECURITY_LOGS_TOPIC}' ===")
 
     try:
         while True:
@@ -180,7 +177,7 @@ def consume_and_print(
 
 def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Central de monitoramento de segurança da PoC3 — consome "
+        description="Central de monitoramento de segurança da PoC3 -> consome "
         "alertas de tentativas de vazamento de PII (tópico 'security-logs')."
     )
     parser.add_argument(
