@@ -7,7 +7,6 @@ import sys
 from dataclasses import dataclass
 from typing import FrozenSet, Optional
 
-# Alteração: Importando da confluent_kafka em vez de kafka-python
 from confluent_kafka import Consumer, KafkaError
 
 DEFAULT_BOOTSTRAP_SERVERS = "localhost:9092"
@@ -30,7 +29,7 @@ class InvalidSecurityAlertError(SecurityMonitorError):
     """
     Levantado quando um evento recebido no tópico `security-logs` não segue
     o schema: sem um campo obrigatório, com campo extra não previsto, ou por
-    não ser um JSON válido.
+    não ser um JSON válido/UTF-8 válido.
     """
 
 
@@ -64,7 +63,7 @@ class SecurityAlert:
             raise InvalidSecurityAlertError(
                 f"Evento de auditoria contém campo(s) não esperado(s): "
                 f"{sorted(unexpected)}. Rejeitado por precaução (Requisito "
-                f"minimização de dados no log de auditoria)."
+                f"Crítico da US06 — minimização de dados no log de auditoria)."
             )
 
         values = {field_name: raw[field_name] for field_name in _REQUIRED_FIELDS}
@@ -87,9 +86,8 @@ class SecurityAlert:
 
 def parse_alert(raw_value: str) -> SecurityAlert:
     """
-    Faz o parsing e a validação de uma mensagem crua do tópico
-    `security-logs`. Levanta `InvalidSecurityAlertError` para JSON malformado
-    ou schema inválido.
+    Faz o parsing e a validação de uma mensagem crua (já decodificada como
+    str) do tópico `security-logs`.
     """
     try:
         payload = json.loads(raw_value)
@@ -106,14 +104,47 @@ def build_consumer(
     group_id: str = CONSUMER_GROUP_ID,
 ) -> Consumer:
     """
-    Cria um Consumer da confluent_kafka assinando o tópico `security-logs` desde o início.
+    Cria um Consumer da confluent_kafka assinando.
     """
     return Consumer({
         'bootstrap.servers': bootstrap_servers,
         'group.id': group_id,
         'auto.offset.reset': 'earliest',
-        'enable.auto.commit': True
+        'enable.auto.commit': False,
     })
+
+
+def consume_once(consumer: Consumer, timeout: float = 5.0) -> Optional[SecurityAlert]:
+    """
+    Consome uma única mensagem (com timeout, em segundos) e retorna o
+    `SecurityAlert` correspondente.
+    """
+    message = consumer.poll(timeout)
+
+    if message is None:
+        return None
+
+    if message.error():
+        if message.error().code() == KafkaError.UNKNOWN_TOPIC_OR_PART:
+            return None
+        logger.warning("Erro no consumer (consume_once): %s", message.error())
+        return None
+
+    raw_bytes = message.value()
+    if raw_bytes is None:
+        return None
+
+    try:
+        raw_value = raw_bytes.decode("utf-8")
+        return parse_alert(raw_value)
+    except (UnicodeDecodeError, InvalidSecurityAlertError) as exc:
+        logger.warning(
+            "Evento descartado (partição %s, offset %s): %s",
+            message.partition(),
+            message.offset(),
+            exc,
+        )
+        return None
 
 
 def consume_and_print(
@@ -121,11 +152,8 @@ def consume_and_print(
     consumer: Optional[Consumer] = None,
 ) -> None:
     """
-    Loop principal do monitor: consome o tópico `security-logs`
-    indefinidamente e imprime cada alerta válido no terminal. Eventos
-    malformados são registrados como aviso e ignorados, sem derrubar o
-    monitor — uma infração adulterada/malformada não deve conseguir
-    silenciar a auditoria.
+    Consome o tópico `security-logs`
+    indefinidamente e imprime cada alerta válido no terminal.
     """
     owns_consumer = consumer is None
     consumer = consumer or build_consumer(bootstrap_servers)
@@ -140,33 +168,9 @@ def consume_and_print(
 
     try:
         while True:
-            # Substitui o iterador do kafka-python pelo poll() da confluent_kafka
-            message = consumer.poll(1.0)
-            
-            if message is None:
-                continue
-                
-            if message.error():
-                # Ignora erro de tópico inexistente antes do primeiro alerta
-                if message.error().code() == KafkaError.UNKNOWN_TOPIC_OR_PART:
-                    continue
-                logger.error("Erro no consumer: %s", message.error())
-                continue
-
-            try:
-                # O payload vem em bytes, decodificamos para UTF-8 aqui
-                raw_value = message.value().decode("utf-8")
-                alert = parse_alert(raw_value)
-            except InvalidSecurityAlertError as exc:
-                logger.warning(
-                    "Evento descartado (partição %s, offset %s): %s",
-                    message.partition(),
-                    message.offset(),
-                    exc,
-                )
-                continue
-
-            print(alert.format_for_display())
+            alert = consume_once(consumer, timeout=1.0)
+            if alert is not None:
+                print(alert.format_for_display())
     except KeyboardInterrupt:
         print("\nEncerrando monitor de segurança...")
     finally:
@@ -205,7 +209,6 @@ def main() -> None:
     except KafkaError as exc:
         logger.error("Falha de comunicação com o Kafka: %s", exc)
         sys.exit(1)
-
 
 if __name__ == "__main__":
     main()

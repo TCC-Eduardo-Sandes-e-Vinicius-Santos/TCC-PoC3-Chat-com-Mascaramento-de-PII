@@ -155,7 +155,7 @@ def _validate_key(key: bytes) -> None:
         )
 
 
-if __name__ == "__main__":
+def main() -> None:
     demo_key = derive_shared_key("U-100", "U-200")
     demo_message = "[DUMMY] mensagem de teste, com acentuação e emoji 🔒."
 
@@ -167,3 +167,6 @@ if __name__ == "__main__":
 
     assert decrypted == demo_message
     print("OK: round-trip de cifragem/decifragem bem-sucedido.")
+
+if __name__ == "__main__":
+    main()
