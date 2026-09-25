@@ -3,7 +3,7 @@
 ## Introdução
 
 <div align="justify">&emsp;&emsp;
-Este documento descreve o funcionamento interno da PoC: os módulos que a compõem, como eles se comunicam, o fluxo de dados desde a digitação da mensagem pelo usuário até a persistência do *ciphertext* no Apache Kafka, e as decisões de design de segurança e privacidade adotadas em especial a atuação do LLM local como firewall de DLP (*Data Loss Prevention*) e a cifragem ponta a ponta com AES-256-GCM. Cabe ressaltar que a implentação prioriza aspectos relacionados à privacidade dos usuários, e que não compartilha dados com terceiros nem realiza transferência internacional com os dados envolvidos.
+Este documento descreve o funcionamento interno da PoC: os módulos que a compõem, como eles se comunicam, o fluxo de dados desde a digitação da mensagem pelo usuário até a persistência do *ciphertext* no Apache Kafka, e as decisões de design de segurança e privacidade adotadas em especial a atuação do LLM local como firewall de DLP (*Data Loss Prevention*) e a cifragem ponta a ponta com AES-256-GCM. Cabe ressaltar que a implentação prioriza aspectos relacionados à privacidade dos usuários, e que não compartilha dados com terceiros nem realiza transferência internacional com os dados envolvidos. Por fim, destaca-se que a finalidade do tratamento é viabilizar uma comunicação privada entre dois usários com mascaramento e cifragem das mensagens enviadas.
 </div>
 
 ---

@@ -8,6 +8,31 @@ from crypto_aes import derive_shared_key, encrypt, decrypt, MessageIntegrityErro
 from dlp_llm import inspect_and_mask
 
 
+CONSENT_MENU = """\n
+=======================================================================
+               TERMO DE CONSCIENTIZAÇÃO E CONSENTIMENTO
+=======================================================================
+
+Bem-vindo ao Chat Seguro E2EE. Antes de prosseguir e acessar a 
+aplicação, por favor, esteja ciente das seguintes diretrizes:
+
+1. PRIVACIDADE: O chat não compartilha dados com terceiros e não 
+   realiza transferência internacional com os seus dados.
+
+2. FINALIDADE: A finalidade exclusiva do tratamento de dados neste 
+   sistema é viabilizar uma comunicação privada entre dois usuários.
+
+3. PREVENÇÃO DE VAZAMENTOS (DLP): É estritamente proibido o envio de 
+   dados pessoais ou sensíveis. Se isso for tentado, o sistema gerará 
+   um alerta de auditoria e realizará o mascaramento automático do dado.
+
+4. SEGURANÇA: Todas as mensagens em trânsito e em repouso são 
+   encriptadas de ponta a ponta.
+
+=======================================================================
+Você consente com esse uso, processamento de seus dados e concorda 
+com as regras descritas acima? (aperte 's' para sim ou 'n' para não):\n"""
+
 def kafka_consumer_thread(consumer, shared_key, my_id, target_id, chat_topic):
     consumer.subscribe([chat_topic])
     while True:
@@ -45,6 +70,13 @@ def kafka_consumer_thread(consumer, shared_key, my_id, target_id, chat_topic):
 
 
 def main() -> None:
+    print(CONSENT_MENU)
+    consent = input()
+
+    if (consent.lower()) != 's':
+        print("\nSaindo...")
+        exit()
+
     parser = argparse.ArgumentParser(description="Chat Seguro E2EE com DLP")
     parser.add_argument("--my-id", required=True, help="Seu ID de Usuário")
     parser.add_argument("--target-id", required=True, help="ID do Destinatário")
