@@ -29,6 +29,9 @@ aplicação, por favor, esteja ciente das seguintes diretrizes:
 4. SEGURANÇA: Todas as mensagens em trânsito e em repouso são 
    encriptadas de ponta a ponta.
 
+Para mais informações, acesse:
+https://github.com/TCC-Eduardo-Sandes-e-Vinicius-Santos/TCC-PoC3-Chat-com-Mascaramento-de-PII
+
 =======================================================================
 Você consente com esse uso, processamento de seus dados e concorda 
 com as regras descritas acima? (aperte 's' para sim ou 'n' para não):\n"""
