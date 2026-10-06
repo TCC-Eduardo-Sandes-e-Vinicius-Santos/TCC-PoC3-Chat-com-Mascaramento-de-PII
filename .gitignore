@@ -1,3 +1,5 @@
 venv/
 src/__pycache__/
 src/test/__pycache__/
+.coverage
+tamper_detection_report.json

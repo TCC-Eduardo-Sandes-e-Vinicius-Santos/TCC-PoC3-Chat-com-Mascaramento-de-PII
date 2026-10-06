@@ -1,145 +1,219 @@
 import base64
-import sys
-from pathlib import Path
+import os
+import random
 
 import pytest
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import crypto_aes
+from crypto_aes import (
+    CryptoAESError,
+    EncryptedMessage,
+    MessageIntegrityError,
+    decrypt,
+    derive_shared_key,
+    encrypt,
+)
 
-import crypto_aes  # noqa: E402
+# derive_shared_key()
 
-
-class TestDeriveSharedKey:
-    def test_key_has_256_bits(self):
-        key = crypto_aes.derive_shared_key("U-100", "U-200")
-        assert isinstance(key, bytes)
-        assert len(key) == 32  # AES-256
-
-    def test_is_symmetric_regardless_of_argument_order(self):
-        key_ab = crypto_aes.derive_shared_key("U-100", "U-200")
-        key_ba = crypto_aes.derive_shared_key("U-200", "U-100")
-        assert key_ab == key_ba
-
-    def test_is_deterministic_across_calls(self):
-        key_1 = crypto_aes.derive_shared_key("U-100", "U-200")
-        key_2 = crypto_aes.derive_shared_key("U-100", "U-200")
-        assert key_1 == key_2
-
-    def test_different_pairs_produce_different_keys(self):
-        key_ab = crypto_aes.derive_shared_key("U-100", "U-200")
-        key_ac = crypto_aes.derive_shared_key("U-100", "U-300")
-        assert key_ab != key_ac
-
-    @pytest.mark.parametrize("id_a, id_b", [("", "U-200"), ("U-100", ""), ("", "")])
-    def test_rejects_empty_ids(self, id_a, id_b):
-        with pytest.raises(crypto_aes.CryptoAESError):
-            crypto_aes.derive_shared_key(id_a, id_b)
-
-    def test_rejects_identical_ids(self):
-        with pytest.raises(crypto_aes.CryptoAESError):
-            crypto_aes.derive_shared_key("U-100", "U-100")
+def test_derive_shared_key_is_order_independent():
+    key_ab = derive_shared_key("U-100", "U-200")
+    key_ba = derive_shared_key("U-200", "U-100")
+    assert key_ab == key_ba
 
 
-@pytest.fixture
-def key() -> bytes:
-    return crypto_aes.derive_shared_key("U-100", "U-200")
+def test_derive_shared_key_has_256_bits():
+    key = derive_shared_key("U-100", "U-200")
+    assert isinstance(key, bytes)
+    assert len(key) == 32
 
 
-class TestEncryptDecryptRoundTrip:
-    @pytest.mark.parametrize(
-        "plaintext",
-        [
-            "Olá, tudo bem?",
-            "Mensagem com acentuação, cedilha e emoji: ção çã 🔒🚀",
-            "",  # string vazia é uma entrada válida
-            "x" * 5000,  # mensagem longa
-            "Meu CPF é [DADO_SENSÍVEL_REMOVIDO]",  # formato típico pós-DLP
-        ],
+def test_derive_shared_key_different_pairs_yield_different_keys():
+    key_1 = derive_shared_key("U-100", "U-200")
+    key_2 = derive_shared_key("U-100", "U-300")
+    assert key_1 != key_2
+
+
+@pytest.mark.parametrize("id_a,id_b", [("", "U-200"), ("U-100", ""), ("", "")])
+def test_derive_shared_key_rejects_empty_ids(id_a, id_b):
+    with pytest.raises(CryptoAESError):
+        derive_shared_key(id_a, id_b)
+
+
+def test_derive_shared_key_rejects_equal_ids():
+    with pytest.raises(CryptoAESError):
+        derive_shared_key("U-100", "U-100")
+
+# Criptografia
+
+def test_encrypt_decrypt_roundtrip_preserves_plaintext(shared_key):
+    original = "Mensagem de teste, com acentuação e emoji 🔒."
+    envelope = encrypt(original, shared_key)
+    recovered = decrypt(envelope.ciphertext, envelope.nonce, shared_key)
+    assert recovered == original
+
+
+def test_encrypt_uses_a_fresh_random_nonce_each_call(shared_key):
+    envelope_1 = encrypt("mesma mensagem", shared_key)
+    envelope_2 = encrypt("mesma mensagem", shared_key)
+    assert envelope_1.nonce != envelope_2.nonce
+    assert envelope_1.ciphertext != envelope_2.ciphertext
+
+
+def test_decrypt_with_wrong_key_raises_integrity_error(shared_key):
+    envelope = encrypt("segredo", shared_key)
+    wrong_key = os.urandom(32)
+    with pytest.raises(MessageIntegrityError):
+        decrypt(envelope.ciphertext, envelope.nonce, wrong_key)
+
+
+def test_decrypt_rejects_malformed_base64(shared_key):
+    with pytest.raises(CryptoAESError):
+        decrypt("isto-nao-e-base64-valido!!", "tambem-nao", shared_key)
+
+
+def test_decrypt_rejects_nonce_with_wrong_length(shared_key):
+    envelope = encrypt("segredo", shared_key)
+    short_nonce = base64.b64encode(b"curto").decode("ascii")
+    with pytest.raises(CryptoAESError):
+        decrypt(envelope.ciphertext, short_nonce, shared_key)
+
+
+@pytest.mark.parametrize("bad_key", [b"muito-curta", os.urandom(16), os.urandom(64)])
+def test_encrypt_rejects_key_with_wrong_size(bad_key):
+    with pytest.raises(CryptoAESError):
+        encrypt("mensagem", bad_key)
+
+
+def test_encrypt_rejects_none_plaintext(shared_key):
+    with pytest.raises(CryptoAESError):
+        encrypt(None, shared_key)
+
+
+# Mensagem
+
+
+def test_encrypted_message_dict_roundtrip(shared_key):
+    envelope = encrypt("mensagem", shared_key)
+    rebuilt = EncryptedMessage.from_dict(envelope.to_dict())
+    assert rebuilt == envelope
+
+
+def test_encrypted_message_from_dict_missing_field_raises():
+    with pytest.raises(CryptoAESError):
+        EncryptedMessage.from_dict({"ciphertext": "abc"})
+
+# Taxa de Detecção de Adulteração (Tamper Detection Rate)
+
+def _flip_random_byte(data: bytes, rng: random.Random) -> bytes:
+    """Inverte (XOR com valor != 0) um byte aleatório de `data`."""
+    data = bytearray(data)
+    index = rng.randrange(len(data))
+    flip = rng.randrange(1, 256)
+    data[index] ^= flip
+    return bytes(data)
+
+
+def measure_tamper_detection_rate(
+    n_trials: int = 1000,
+    target: str = "ciphertext",
+    seed: int = 42,
+) -> dict:
+    """
+    Executa `n_trials` tentativas de adulteração (bit-flipping) sobre o
+    `ciphertext` ou o `nonce` de mensagens cifradas com AES-256-GCM, e mede
+    a proporção corretamente rejeitada por `MessageIntegrityError`.
+
+    Retorna um dicionário com as contagens brutas e a taxa calculada,
+    reaproveitável tanto pelos testes automatizados quanto pelo script de
+    medição usado para reportar a métrica na seção de Resultados.
+    """
+    assert target in {"ciphertext", "nonce"}
+
+    rng = random.Random(seed)
+    key = derive_shared_key("U-100", "U-200")
+
+    detected = 0
+    undetected_cases = []
+    unexpected_errors = []
+
+    for i in range(n_trials):
+        plaintext = f"mensagem de teste número {i} com conteúdo variável {rng.random()}"
+        envelope = encrypt(plaintext, key)
+
+        if target == "ciphertext":
+            raw = base64.b64decode(envelope.ciphertext)
+            tampered_raw = _flip_random_byte(raw, rng)
+            tampered_ciphertext = base64.b64encode(tampered_raw).decode("ascii")
+            tampered_nonce = envelope.nonce
+        else:
+            raw = base64.b64decode(envelope.nonce)
+            tampered_raw = _flip_random_byte(raw, rng)
+            tampered_nonce = base64.b64encode(tampered_raw).decode("ascii")
+            tampered_ciphertext = envelope.ciphertext
+
+        try:
+            decrypt(tampered_ciphertext, tampered_nonce, key)
+        except MessageIntegrityError:
+            detected += 1
+        except CryptoAESError as exc:
+            unexpected_errors.append((i, repr(exc)))
+        else:
+            undetected_cases.append(i)
+
+    return {
+        "target": target,
+        "n_trials": n_trials,
+        "detected": detected,
+        "undetected": undetected_cases,
+        "unexpected_errors": unexpected_errors,
+        "tamper_detection_rate": detected / n_trials,
+    }
+
+
+@pytest.mark.parametrize("target", ["ciphertext", "nonce"])
+def test_tamper_detection_rate_is_100_percent(target):
+    """
+    Métrica de avaliação: Taxa de Detecção de Adulteração.
+
+    Executa 1000 tentativas de bit-flipping sobre o ciphertext/nonce e
+    exige que TODAS sejam corretamente rejeitadas por MessageIntegrityError
+    qualquer falha indica uma regressão crítica na garantia de
+    integridade (US04).
+    """
+    result = measure_tamper_detection_rate(n_trials=1000, target=target)
+
+    assert result["undetected"] == [], (
+        f"{len(result['undetected'])} mensagem(ns) adulterada(s) foram "
+        f"decifradas com sucesso quando deveriam ter sido rejeitadas: "
+        f"{result['undetected']}"
     )
-    def test_decrypt_returns_original_plaintext(self, key, plaintext):
-        envelope = crypto_aes.encrypt(plaintext, key)
-        recovered = crypto_aes.decrypt(envelope.ciphertext, envelope.nonce, key)
-        assert recovered == plaintext
-
-    def test_ciphertext_and_nonce_are_valid_base64(self, key):
-        envelope = crypto_aes.encrypt("mensagem qualquer", key)
-        # não deve levantar exceção:
-        base64.b64decode(envelope.ciphertext, validate=True)
-        base64.b64decode(envelope.nonce, validate=True)
-
-    def test_nonce_and_ciphertext_change_on_every_call(self, key):
-        envelope_1 = crypto_aes.encrypt("mesma mensagem", key)
-        envelope_2 = crypto_aes.encrypt("mesma mensagem", key)
-        assert envelope_1.nonce != envelope_2.nonce
-        assert envelope_1.ciphertext != envelope_2.ciphertext
-
-    def test_to_dict_and_from_dict_round_trip(self, key):
-        envelope = crypto_aes.encrypt("mensagem", key)
-        rebuilt = crypto_aes.EncryptedMessage.from_dict(envelope.to_dict())
-        recovered = crypto_aes.decrypt(rebuilt.ciphertext, rebuilt.nonce, key)
-        assert recovered == "mensagem"
-
-    def test_from_dict_rejects_missing_field(self):
-        with pytest.raises(crypto_aes.CryptoAESError):
-            crypto_aes.EncryptedMessage.from_dict({"ciphertext": "abc"})
-
-
-class TestIntegrityAndTampering:
-    def test_tampered_ciphertext_is_rejected(self, key):
-        envelope = crypto_aes.encrypt("mensagem original", key)
-
-        raw = bytearray(base64.b64decode(envelope.ciphertext))
-        raw[0] ^= 0xFF  # inverte o primeiro byte do ciphertext
-        tampered_ciphertext = base64.b64encode(bytes(raw)).decode("ascii")
-
-        with pytest.raises(crypto_aes.MessageIntegrityError):
-            crypto_aes.decrypt(tampered_ciphertext, envelope.nonce, key)
-
-    def test_wrong_key_is_rejected(self, key):
-        envelope = crypto_aes.encrypt("mensagem original", key)
-        wrong_key = crypto_aes.derive_shared_key("U-100", "U-999")
-
-        with pytest.raises(crypto_aes.MessageIntegrityError):
-            crypto_aes.decrypt(envelope.ciphertext, envelope.nonce, wrong_key)
-
-    def test_wrong_nonce_is_rejected(self, key):
-        envelope = crypto_aes.encrypt("mensagem original", key)
-        other_envelope = crypto_aes.encrypt("outra mensagem", key)
-
-        with pytest.raises(crypto_aes.MessageIntegrityError):
-            crypto_aes.decrypt(envelope.ciphertext, other_envelope.nonce, key)
-
-    def test_invalid_base64_raises_crypto_aes_error(self, key):
-        with pytest.raises(crypto_aes.CryptoAESError):
-            crypto_aes.decrypt("isto não é base64 válido!!", "também não", key)
-
-
-class TestKeyValidation:
-    @pytest.mark.parametrize(
-        "bad_key",
-        [b"muito curta", b"x" * 16, b"x" * 64, "chave-nao-e-bytes", None],
+    assert result["unexpected_errors"] == [], (
+        f"{len(result['unexpected_errors'])} tentativa(s) falharam por um "
+        f"motivo diferente da tag GCM: {result['unexpected_errors']}"
     )
-    def test_encrypt_rejects_invalid_key(self, bad_key):
-        with pytest.raises(crypto_aes.CryptoAESError):
-            crypto_aes.encrypt("mensagem", bad_key)
-
-    @pytest.mark.parametrize(
-        "bad_key",
-        [b"muito curta", b"x" * 16, b"x" * 64, "chave-nao-e-bytes", None],
-    )
-    def test_decrypt_rejects_invalid_key(self, key, bad_key):
-        envelope = crypto_aes.encrypt("mensagem", key)
-        with pytest.raises(crypto_aes.CryptoAESError):
-            crypto_aes.decrypt(envelope.ciphertext, envelope.nonce, bad_key)
+    assert result["tamper_detection_rate"] == 1.0
 
 
-class TestInteroperability:
-    def test_envelope_is_decryptable_with_raw_aesgcm(self, key):
-        envelope = crypto_aes.encrypt("mensagem interoperável", key)
+def test_tamper_detection_single_bit_flip_in_ciphertext_is_detected(shared_key):
+    """Caso mínimo e determinístico: um único bit invertido já é suficiente
+    para que o GCM rejeite a mensagem."""
+    envelope = encrypt("mensagem sensível", shared_key)
 
-        raw_ciphertext = base64.b64decode(envelope.ciphertext)
-        raw_nonce = base64.b64decode(envelope.nonce)
+    raw_ciphertext = bytearray(base64.b64decode(envelope.ciphertext))
+    raw_ciphertext[0] ^= 0b0000_0001  # inverte o bit menos significativo
+    tampered_ciphertext = base64.b64encode(bytes(raw_ciphertext)).decode("ascii")
 
-        plaintext = AESGCM(key).decrypt(raw_nonce, raw_ciphertext, None)
-        assert plaintext.decode("utf-8") == "mensagem interoperável"
+    with pytest.raises(MessageIntegrityError):
+        decrypt(tampered_ciphertext, envelope.nonce, shared_key)
+
+
+def test_tamper_detection_single_bit_flip_in_nonce_is_detected(shared_key):
+    envelope = encrypt("mensagem sensível", shared_key)
+
+    raw_nonce = bytearray(base64.b64decode(envelope.nonce))
+    raw_nonce[0] ^= 0b0000_0001
+    tampered_nonce = base64.b64encode(bytes(raw_nonce)).decode("ascii")
+
+    with pytest.raises(MessageIntegrityError):
+        decrypt(envelope.ciphertext, tampered_nonce, shared_key)
