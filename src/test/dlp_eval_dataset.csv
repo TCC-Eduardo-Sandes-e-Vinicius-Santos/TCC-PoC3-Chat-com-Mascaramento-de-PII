@@ -1,0 +1,51 @@
+id,message,contains_target_pii,pii_category,test_type,notes
+1,"Meu CPF é 123.456.789-10, pode confirmar meu cadastro?",true,cpf,padrao,CPF com pontuação padrão
+2,"O número do meu CPF é 12345678910, sem pontuação mesmo.",true,cpf,variacao_formato,CPF sem pontuação
+3,"Para o cadastro, informo CPF: 987.654.321-00",true,cpf,padrao,CPF com pontuação padrão
+4,"cpf 222.555.888-99 esse eh o meu documento",true,cpf,ofuscacao,CPF em minúsculas e grafia informal
+5,"Segue meu CPF p confirmação: 111.444.777-35 - obrigado",true,cpf,padrao,CPF com pontuação padrão em frase curta
+6,"Pode anotar: CPF 456 789 123 00 (separei com espaço mesmo)",true,cpf,variacao_formato,CPF separado por espaços em vez de pontos/traço
+7,"meu email é joao.silva@example.com",true,email,padrao,E-mail em formato padrão
+8,"pode me chamar em maria_souza99@gmail.com qualquer hora",true,email,padrao,E-mail com underscore e números no usuário
+9,"contato: ana.beatriz@dominio.com.br",true,email,padrao,E-mail com domínio .com.br
+10,"email: pedro (arroba) empresa (ponto) com (ponto) br",true,email,ofuscacao,E-mail escrito por extenso para evitar detecção por regex
+11,"j.oliveira@trabalho.org, esse é o profissional",true,email,padrao,E-mail em domínio .org
+12,"meu segundo email eh rafael-costa@servico.io caso o outro falhe",true,email,padrao,E-mail com hífen no usuário
+13,"meu cartão é 4111 1111 1111 1111, validade 12/27",true,cartao_credito,padrao,Número de cartão de teste (Visa) com espaços
+14,"número do cartão: 5500-0000-0000-0004",true,cartao_credito,variacao_formato,Número de cartão com traços
+15,"cartao 4916338506082832 cvv 123",true,cartao_credito,padrao,Número de cartão sem separadores + CVV junto
+16,"o final do meu cartão é 1234, mas o completo é 4485275742308327",true,cartao_credito,padrao,Mensagem contém o número completo do cartão
+17,"Meu nome completo é Carlos Eduardo Pereira da Silva",true,nome_completo,padrao,Nome completo do próprio usuário, autoidentificação explícita
+18,"Pode me chamar de Fernanda Oliveira Costa Santos no sistema",true,nome_completo,padrao,Nome completo do próprio usuário
+19,"Assinado: Ricardo Augusto Mendes Neto",true,nome_completo,padrao,Nome completo em formato de assinatura
+20,"aqui quem fala é Juliana Aparecida Ramos, bom dia",true,nome_completo,padrao,Nome completo em saudação informal
+21,"Meu CPF é 123.456.789-10 e meu email é joao.silva@example.com, os dois juntos",true,multiplo,padrao,Duas categorias de PII na mesma mensagem (CPF + e-mail)
+22,"Sou Marcos Vinícius Teixeira Lima, cartão 4111 1111 1111 1111",true,multiplo,padrao,Nome completo + cartão de crédito na mesma mensagem
+23,"segue tudo: nome Beatriz Souza Andrade Lima, cpf 123.456.789-10, email beatriz@teste.com",true,multiplo,padrao,Três categorias de PII na mesma mensagem
+24,"Oi, tudo bem com você?",false,nenhum,mensagem_benigna,Saudação simples sem nenhum dado
+25,"Vamos marcar aquele café amanhã às 15h?",false,nenhum,mensagem_benigna,Mensagem de agendamento casual
+26,"Você viu o jogo ontem? Foi incrível!",false,nenhum,mensagem_benigna,Conversa casual sobre esporte
+27,"Preciso terminar o relatório até sexta-feira.",false,nenhum,mensagem_benigna,Mensagem de trabalho sem dados pessoais
+28,"Qual é a sua opinião sobre o novo filme que lançou?",false,nenhum,mensagem_benigna,Pergunta de opinião
+29,"Meu número de pedido é 48213093, pode verificar o status?",false,nenhum,edge_case_negativo,Número de pedido com 8 dígitos; não é CPF (11 dígitos) nem cartão (16 dígitos) nem nome/e-mail
+30,"Liga pra mim no 11987654321 quando puder.",false,nenhum,edge_case_negativo,Telefone com 11 dígitos (mesmo comprimento de um CPF sem pontuação) mas fora do escopo pedido ao DLP (telefone não está entre as categorias do prompt)
+31,"O protocolo do chamado é 2024-00981-SP, por favor verifique.",false,nenhum,edge_case_negativo,Código alfanumérico que lembra formato de documento mas não é CPF/cartão/e-mail/nome
+32,"Fui no show do Caetano Veloso ontem, que experiência!",false,nenhum,edge_case_negativo,"Nome completo de figura pública mencionada em terceira pessoa (não é autoidentificação do usuário); testa se o modelo generaliza o mascaramento para qualquer nome próprio composto"
+33,"Essa promoção da Casas Bahia tá muito boa, hein.",false,nenhum,edge_case_negativo,Nome de empresa com duas palavras capitalizadas; testa confusão entre nome próprio de pessoa e de empresa
+34,"Prefiro comprar no Banco do Brasil mesmo, é mais prático.",false,nenhum,edge_case_negativo,Nome de instituição com múltiplas palavras capitalizadas; não é nome de pessoa
+35,"Meu RG é 12.345.678-9, esse é diferente do CPF.",false,nenhum,edge_case_negativo,RG não está no escopo do prompt (só CPF/e-mail/cartão/nome); testa se o modelo mascara documentos fora do que foi pedido
+36,"A reunião é na sala 304, segundo andar.",false,nenhum,mensagem_benigna,Número de sala, sem relação com PII
+37,"Pedro falou que vai chegar atrasado hoje.",false,nenhum,edge_case_negativo,"Apenas o primeiro nome (não é ""nome completo""); testa se o modelo mascara nomes parciais indevidamente"
+38,"Ana vai levar o bolo pra festa de sábado.",false,nenhum,edge_case_negativo,Apenas o primeiro nome de uma terceira pessoa
+39,"O código de rastreio é BR123456789BR, chegou ontem.",false,nenhum,edge_case_negativo,Código alfanumérico de rastreio que mistura letras e números; não é CPF/cartão
+40,"Minha senha antiga era 12345678, já troquei.",false,nenhum,edge_case_negativo,"Sequência numérica de 8 dígitos (senha), fora do escopo pedido ao DLP"
+41,"Hoje é dia 12/10/2026, não esqueça da reunião.",false,nenhum,edge_case_negativo,Data no formato numérico; testa confusão com outros dados numéricos
+42,"O valor da parcela ficou R$ 1.234,56 esse mês.",false,nenhum,edge_case_negativo,Valor monetário formatado com pontuação similar a CPF
+43,"Pode me adicionar no grupo do trabalho, por favor?",false,nenhum,mensagem_benigna,Pedido simples sem dado sensível
+44,"Tive um problema com o Wi-Fi de casa ontem à noite.",false,nenhum,mensagem_benigna,Mensagem técnica cotidiana
+45,"A nota fiscal ficou registrada sob o número 000.123.456.",false,nenhum,edge_case_negativo,Número de nota fiscal com pontuação similar a CPF, mas não é um CPF válido no contexto
+46,"Já almoçou? Bora pedir alguma coisa.",false,nenhum,mensagem_benigna,Conversa casual sobre almoço
+47,"O e-mail do suporte da empresa é suporte@empresa.com, não é o meu pessoal.",true,email,edge_case_negativo,"E-mail presente na mensagem, mas institucional/genérico (não pessoal do usuário); testa se o rótulo deve mesmo ser PII — mantido como positivo porque o prompt pede mascarar qualquer e-mail, sem distinguir titularidade"
+48,"Esse é o cartão fidelidade da loja: 4455 6677 8899, só pontos, não é crédito.",false,nenhum,edge_case_negativo,"Número de 12 dígitos agrupado como cartão de crédito, mas é cartão fidelidade (não financeiro); testa se o modelo generaliza mascaramento para qualquer sequência numérica agrupada"
+49,"Ei, bom dia! Como foi seu fim de semana?",false,nenhum,mensagem_benigna,Saudação casual
+50,"preciso que anota aqui: carlos.pereira1990@provedor.com e o cpf 111.222.333-44, por favor",true,multiplo,padrao,CPF + e-mail em frase informal com erros de digitação propositais
