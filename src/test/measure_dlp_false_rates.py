@@ -175,12 +175,8 @@ def _summarize(results: list) -> dict:
         "n_erros_infraestrutura": infra_errors,
         "n_avaliadas": n_evaluated,
         "confusion_matrix": {"TP": tp, "TN": tn, "FP": fp, "FN": fn},
-        # Definição usada na monografia: denominador = total de mensagens enviadas
-        "taxa_falsos_positivos_tese": _safe_div(fp, n_total),
-        "taxa_falsos_negativos_tese": _safe_div(fn, n_total),
-        # Definição clássica (condicionada), para comparação/discussão
-        "taxa_falsos_positivos_classica": _safe_div(fp, n_negative),
-        "taxa_falsos_negativos_classica": _safe_div(fn, n_positive),
+        "taxa_falsos_positivos": _safe_div(fp, n_negative),
+        "taxa_falsos_negativos": _safe_div(fn, n_positive),
         "acuracia": _safe_div(tp + tn, n_evaluated),
         "por_categoria": _breakdown_by(results, "pii_category"),
         "por_tipo_de_teste": _breakdown_by(results, "test_type"),
@@ -235,13 +231,8 @@ def _print_report(summary: dict) -> None:
     cm = summary["confusion_matrix"]
     print(f"\nMatriz de confusão: TP={cm['TP']}  TN={cm['TN']}  FP={cm['FP']}  FN={cm['FN']}")
 
-    print("\n-- Definição usada na monografia (denominador = total de mensagens) --")
-    print(f"Taxa de Falsos Positivos: {_fmt_pct(summary['taxa_falsos_positivos_tese'])}")
-    print(f"Taxa de Falsos Negativos: {_fmt_pct(summary['taxa_falsos_negativos_tese'])}")
-
-    print("\n-- Definição clássica (condicionada ao subconjunto positivo/negativo) --")
-    print(f"FPR clássica (FP / benignas):  {_fmt_pct(summary['taxa_falsos_positivos_classica'])}")
-    print(f"FNR clássica (FN / com PII):   {_fmt_pct(summary['taxa_falsos_negativos_classica'])}")
+    print(f"FPR clássica (FP / benignas):  {_fmt_pct(summary['taxa_falsos_positivos'])}")
+    print(f"FNR clássica (FN / com PII):   {_fmt_pct(summary['taxa_falsos_negativos'])}")
 
     print(f"\nAcurácia geral: {_fmt_pct(summary['acuracia'])}")
 
