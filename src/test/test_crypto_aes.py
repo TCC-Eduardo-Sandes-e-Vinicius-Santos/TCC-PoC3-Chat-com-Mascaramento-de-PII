@@ -44,6 +44,80 @@ def test_derive_shared_key_rejects_equal_ids():
     with pytest.raises(CryptoAESError):
         derive_shared_key("U-100", "U-100")
 
+# Parâmetros da derivação vindos do ambiente / .env
+
+def _b64(n: int) -> str:
+    return base64.b64encode(os.urandom(n)).decode("ascii")
+
+
+def test_derive_shared_key_fails_closed_without_salt(monkeypatch):
+    monkeypatch.delenv(crypto_aes.ENV_SALT, raising=False)
+    with pytest.raises(CryptoAESError, match=crypto_aes.ENV_SALT):
+        derive_shared_key("U-100", "U-200")
+
+
+def test_derive_shared_key_fails_closed_without_info(monkeypatch):
+    monkeypatch.delenv(crypto_aes.ENV_INFO, raising=False)
+    with pytest.raises(CryptoAESError, match=crypto_aes.ENV_INFO):
+        derive_shared_key("U-100", "U-200")
+
+
+def test_derive_shared_key_rejects_short_salt(monkeypatch):
+    monkeypatch.setenv(crypto_aes.ENV_SALT, _b64(16))
+    with pytest.raises(CryptoAESError, match="curto"):
+        derive_shared_key("U-100", "U-200")
+
+
+def test_derive_shared_key_rejects_invalid_base64_salt(monkeypatch):
+    monkeypatch.setenv(crypto_aes.ENV_SALT, "não é base64!!")
+    with pytest.raises(CryptoAESError, match="base64"):
+        derive_shared_key("U-100", "U-200")
+
+
+def test_same_ids_with_different_salt_yield_different_keys(monkeypatch):
+    """Conhecer só os IDs (visíveis no Kafka) não reproduz a chave."""
+    key_1 = derive_shared_key("U-100", "U-200")
+    monkeypatch.setenv(crypto_aes.ENV_SALT, _b64(32))
+    key_2 = derive_shared_key("U-100", "U-200")
+    assert key_1 != key_2
+
+
+def test_same_ids_with_different_info_yield_different_keys(monkeypatch):
+    key_1 = derive_shared_key("U-100", "U-200")
+    monkeypatch.setenv(crypto_aes.ENV_INFO, "poc3-e2ee-key-v2")
+    key_2 = derive_shared_key("U-100", "U-200")
+    assert key_1 != key_2
+
+
+def test_salt_and_info_are_read_from_env_file(monkeypatch, tmp_path):
+    salt = _b64(32)
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "# comentário\n"
+        f'{crypto_aes.ENV_SALT}="{salt}"\n'
+        f"export {crypto_aes.ENV_INFO}=poc3-e2ee-key-v1\n",
+        encoding="utf-8",
+    )
+    monkeypatch.delenv(crypto_aes.ENV_SALT, raising=False)
+    monkeypatch.delenv(crypto_aes.ENV_INFO, raising=False)
+    monkeypatch.setattr(crypto_aes, "DEFAULT_ENV_FILE", env_file)
+
+    key_from_file = derive_shared_key("U-100", "U-200")
+
+    monkeypatch.setenv(crypto_aes.ENV_SALT, salt)
+    monkeypatch.setenv(crypto_aes.ENV_INFO, "poc3-e2ee-key-v1")
+    assert key_from_file == derive_shared_key("U-100", "U-200")
+
+
+def test_environment_variables_take_precedence_over_env_file(monkeypatch, tmp_path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(f"{crypto_aes.ENV_SALT}={_b64(32)}\n", encoding="utf-8")
+    monkeypatch.setattr(crypto_aes, "DEFAULT_ENV_FILE", env_file)
+
+    key_env = derive_shared_key("U-100", "U-200")
+    monkeypatch.setattr(crypto_aes, "DEFAULT_ENV_FILE", tmp_path / "nada.env")
+    assert key_env == derive_shared_key("U-100", "U-200")
+
 # Criptografia
 
 def test_encrypt_decrypt_roundtrip_preserves_plaintext(shared_key):

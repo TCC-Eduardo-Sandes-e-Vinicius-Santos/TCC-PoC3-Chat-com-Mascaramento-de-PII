@@ -3,3 +3,6 @@ src/__pycache__/
 src/test/__pycache__/
 .coverage
 tamper_detection_report.json
+
+# Segredo da derivação de chaves (nunca versionar)
+.env

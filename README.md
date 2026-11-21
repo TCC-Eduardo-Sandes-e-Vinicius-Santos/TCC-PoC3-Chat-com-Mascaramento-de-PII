@@ -110,6 +110,17 @@ pip install -r requirements.txt
 
 ```
 
+5. Configure o segredo da derivação de chaves E2EE:
+
+```bash
+cp .env.example .env
+python3 -c "import secrets, base64; print(base64.b64encode(secrets.token_bytes(32)).decode())"
+# cole o valor gerado em POC3_HKDF_SALT no .env
+
+```
+
+Todos os clientes que conversam entre si precisam do **mesmo** `.env`, entregue por um canal fora do Kafka. O arquivo não é versionado e não deve ser copiado para o host do broker. Sem `POC3_HKDF_SALT`, o cliente se recusa a derivar chaves. As limitações desse modelo (segredo de grupo, sem *forward secrecy*) estão em `docs/arquitetura.md`.
+
 ### Executando a Prova de Conceito
 
 Para simular o ambiente adequadamente e testar a escolha de destinatários, abra três instâncias de terminal:

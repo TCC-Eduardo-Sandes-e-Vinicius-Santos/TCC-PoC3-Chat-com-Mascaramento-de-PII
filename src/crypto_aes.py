@@ -11,16 +11,24 @@ Responsável por:
 
 Ver docs/arquitetura.md, seção "crypto_aes.py — Criptografia Simétrica
 Ponta a Ponta", para o racional de design e as limitações conhecidas
-(em especial: a derivação depende apenas dos IDs informados via CLI, sem
-um handshake de identidade autenticado).
+(em especial: não há handshake de identidade autenticado, e o segredo
+POC3_HKDF_SALT é compartilhado por todos os clientes).
+
+Configuração (variáveis de ambiente ou arquivo .env na raiz do projeto):
+  - POC3_HKDF_SALT: segredo de alta entropia (>= 32 bytes, em base64),
+    distribuído apenas aos clientes. Nunca deve existir no host do broker.
+  - POC3_HKDF_INFO: rótulo de contexto/versão da derivação (não secreto).
+Veja .env.example.
 """
 
 from __future__ import annotations
 
 import base64
+import binascii
 import os
 from dataclasses import dataclass
-from typing import Final
+from pathlib import Path
+from typing import Final, Optional
 
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives import hashes
@@ -29,8 +37,11 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 _NONCE_SIZE: Final[int] = 12
 _KEY_SIZE:   Final[int] = 32
-_HKDF_SALT:  Final[bytes] = b"tcc-poc3-chat-mascaramento-pii"
-_HKDF_INFO:  Final[bytes] = b"crypto_aes.derive_shared_key"
+_MIN_SALT_SIZE: Final[int] = 32
+
+ENV_SALT: Final[str] = "POC3_HKDF_SALT"
+ENV_INFO: Final[str] = "POC3_HKDF_INFO"
+DEFAULT_ENV_FILE: Final[Path] = Path(__file__).resolve().parent.parent / ".env"
 
 
 class CryptoAESError(Exception):
@@ -66,12 +77,77 @@ class EncryptedMessage:
             ) from exc
 
 
+def load_env_file(path: Optional[Path] = None) -> None:
+    """
+    Carrega pares CHAVE=VALOR de um arquivo .env para os.environ, sem
+    sobrescrever variáveis já definidas no ambiente. Implementação mínima,
+    só com a biblioteca padrão, para não acrescentar dependência ao projeto.
+    Linhas vazias e comentários (#) são ignorados; aspas simples ou duplas
+    em volta do valor são removidas. Se o arquivo não existir, nada é feito.
+    """
+    env_path = Path(path) if path is not None else DEFAULT_ENV_FILE
+    if not env_path.is_file():
+        return
+
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        if line.startswith("export "):
+            line = line[len("export "):].lstrip()
+        name, value = line.split("=", 1)
+        name, value = name.strip(), value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        if name:
+            os.environ.setdefault(name, value)
+
+
+def _load_kdf_params() -> tuple[bytes, bytes]:
+    """
+    Lê salt e info da derivação a partir do ambiente (carregando o .env, se
+    existir). Falha de forma fechada: sem segredo configurado, nenhuma chave
+    é derivada, em vez de cair silenciosamente num valor padrão conhecido.
+    """
+    load_env_file()
+
+    salt_b64 = os.environ.get(ENV_SALT, "").strip()
+    info = os.environ.get(ENV_INFO, "").strip()
+
+    if not salt_b64:
+        raise CryptoAESError(
+            f"{ENV_SALT} não configurado. Gere um valor com "
+            "`python3 -c \"import secrets, base64; "
+            "print(base64.b64encode(secrets.token_bytes(32)).decode())\"` "
+            "e defina-o no .env (veja .env.example)."
+        )
+    if not info:
+        raise CryptoAESError(f"{ENV_INFO} não configurado (veja .env.example).")
+
+    try:
+        salt = base64.b64decode(salt_b64, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise CryptoAESError(f"{ENV_SALT} não é um base64 válido: {exc}") from exc
+
+    if len(salt) < _MIN_SALT_SIZE:
+        raise CryptoAESError(
+            f"{ENV_SALT} muito curto: {len(salt)} bytes "
+            f"(mínimo {_MIN_SALT_SIZE} bytes aleatórios)."
+        )
+
+    return salt, info.encode("utf-8")
+
+
 def derive_shared_key(id_a: str, id_b: str) -> bytes:
     """
     Deriva uma chave simétrica de 256 bits compartilhada exclusivamente pelo
-    par (id_a, id_b), via HKDF-SHA256. Os IDs são ordenados antes da derivação, 
+    par (id_a, id_b), via HKDF-SHA256. Os IDs são ordenados antes da derivação,
     então o par produz sempre a mesma chave, independentemente de quem é
     remetente e quem é destinatário na chamada.
+
+    O salt (secreto, alta entropia) e o info vêm de POC3_HKDF_SALT e
+    POC3_HKDF_INFO. Sem o salt, conhecer os IDs (que trafegam em claro no
+    Kafka) não basta para derivar a chave.
     """
     if not id_a or not id_b:
         raise CryptoAESError(
@@ -80,14 +156,16 @@ def derive_shared_key(id_a: str, id_b: str) -> bytes:
     if id_a == id_b:
         raise CryptoAESError("id_a e id_b devem ser IDs de usuários distintos.")
 
+    salt, info = _load_kdf_params()
+
     ordered_ids = sorted([str(id_a), str(id_b)])
     ikm = "|".join(ordered_ids).encode("utf-8")
 
     hkdf = HKDF(
         algorithm=hashes.SHA256(),
         length=_KEY_SIZE,
-        salt=_HKDF_SALT,
-        info=_HKDF_INFO,
+        salt=salt,
+        info=info,
     )
     return hkdf.derive(ikm)
 
