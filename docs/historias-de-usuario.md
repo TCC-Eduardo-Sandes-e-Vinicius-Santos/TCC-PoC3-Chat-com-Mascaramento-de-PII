@@ -30,9 +30,9 @@ A metodologia adotada segue o padrão ágil, onde as histórias de usuário são
 
 #### Critérios de Aceitação
 
-[ ] O cliente de chat deve permitir a configuração via terminal dos parâmetros `--my-id` e `--target-id`.
-[ ] As mensagens devem ser enviadas e organizadas na sala de chat (tópico Kafka) especificada pelos usuários.
-[ ] O sistema deve exibir as mensagens formatando quem é o remetente e quem é o destinatário no terminal.
+- [x] O cliente de chat deve permitir a configuração via terminal dos parâmetros `--my-id` e `--target-id`.
+- [x] As mensagens devem ser enviadas e organizadas na sala de chat (tópico Kafka) especificada pelos usuários.
+- [x] O sistema deve exibir as mensagens formatando quem é o remetente e quem é o destinatário no terminal.
 
 ---
 
@@ -42,10 +42,10 @@ A metodologia adotada segue o padrão ágil, onde as histórias de usuário são
 
 #### Critérios de Aceitação
 
-[ ] O sistema deve interceptar a mensagem original antes do envio à rede.
-[ ] O motor de IA (LLM via Ollama) deve processar a mensagem e identificar dados sensíveis pelo contexto.
-[ ] Os dados sensíveis identificados devem ser substituídos por tags de mascaramento (ex: `[DADO_SENSÍVEL_REMOVIDO]`).
-[ ] A mensagem mascarada deve manter o sentido original da conversa, removendo estritamente a Informação Pessoal Identificável (PII).
+- [x] O sistema deve interceptar a mensagem original antes do envio à rede.
+- [x] O motor de IA (LLM via Ollama) deve processar a mensagem e identificar dados sensíveis pelo contexto.
+- [x] Os dados sensíveis identificados devem ser substituídos por tags de mascaramento (ex: `[DADO_SENSÍVEL_REMOVIDO]`).
+- [x] A mensagem mascarada deve manter o sentido original da conversa, removendo estritamente a Informação Pessoal Identificável (PII).
 
 ---
 
@@ -55,9 +55,9 @@ A metodologia adotada segue o padrão ágil, onde as histórias de usuário são
 
 #### Critérios de Aceitação
 
-[ ] A mensagem, após ser higienizada pelo DLP, deve ser cifrada utilizando o algoritmo AES-256 no modo GCM (biblioteca `cryptography`).
-[ ] O *broker* Apache Kafka deve receber e armazenar estritamente o *ciphertext* (dado ininteligível).
-[ ] O processo de cifragem e decifragem deve utilizar chaves derivadas ou compartilhadas exclusivamente entre os IDs envolvidos na comunicação.
+- [x] A mensagem, após ser higienizada pelo DLP, deve ser cifrada utilizando o algoritmo AES-256 no modo GCM (biblioteca `cryptography`).
+- [x] O *broker* Apache Kafka deve receber e armazenar estritamente o *ciphertext* (dado ininteligível).
+- [x] O processo de cifragem e decifragem deve utilizar chaves derivadas ou compartilhadas exclusivamente entre os IDs envolvidos na comunicação.
 
 ---
 
@@ -67,9 +67,9 @@ A metodologia adotada segue o padrão ágil, onde as histórias de usuário são
 
 #### Critérios de Aceitação
 
-[ ] O modo de criptografia (AES-GCM) deve gerar um *nonce* e uma *tag* de autenticação para cada mensagem.
-[ ] O receptor deve validar a *tag* de autenticação no momento da decifragem.
-[ ] O sistema deve rejeitar ou emitir um erro crítico caso detecte que o *ciphertext* foi adulterado no Kafka.
+- [x] O modo de criptografia (AES-GCM) deve gerar um *nonce* e uma *tag* de autenticação para cada mensagem.
+- [x] O receptor deve validar a *tag* de autenticação no momento da decifragem.
+- [x] O sistema deve rejeitar ou emitir um erro crítico caso detecte que o *ciphertext* foi adulterado no Kafka.
 
 ---
 
@@ -79,9 +79,9 @@ A metodologia adotada segue o padrão ágil, onde as histórias de usuário são
 
 #### Critérios de Aceitação
 
-[ ] O sistema deve consumir as mensagens retidas no tópico do Apache Kafka desde o início ao ser inicializado.
-[ ] O processo de restauração deve decifrar e exibir apenas o histórico pertinente à dupla de comunicação.
-[ ] As mensagens restauradas do histórico já devem estar higienizadas/mascaradas, comprovando que o dado sensível não foi retido na infraestrutura de backup.
+- [x] O sistema deve consumir as mensagens retidas no tópico do Apache Kafka desde o início ao ser inicializado.
+- [x] O processo de restauração deve decifrar e exibir apenas o histórico pertinente à dupla de comunicação.
+- [x] As mensagens restauradas do histórico já devem estar higienizadas/mascaradas, comprovando que o dado sensível não foi retido na infraestrutura de backup.
 
 ---
 
@@ -91,9 +91,9 @@ A metodologia adotada segue o padrão ágil, onde as histórias de usuário são
 
 #### Critérios de Aceitação
 
-[ ] O cliente de chat, ao detectar um PII via LLM (US02), deve disparar um evento estruturado em JSON para um tópico segregado no Kafka (ex: `security-logs`).
-[ ] O log de auditoria deve conter os metadados da infração: tipo do dado ou tipo do alerta, timestamp, ID do remetente e ID do destinatário.
-[ ] **Requisito Crítico (Minimização):** O log enviado ao servidor de monitoramento **não pode**, sob nenhuma circunstância, conter a string do dado sensível em claro.
+- [x] O cliente de chat, ao detectar um PII via LLM (US02), deve disparar um evento estruturado em JSON para um tópico segregado no Kafka (ex: `security-logs`).
+- [x] O log de auditoria deve conter os metadados da infração: tipo do dado ou tipo do alerta, timestamp, ID do remetente e ID do destinatário.
+- [x] **Requisito Crítico (Minimização):** O log enviado ao servidor de monitoramento **não pode**, sob nenhuma circunstância, conter a string do dado sensível em claro.
 
 ---
 
@@ -103,5 +103,5 @@ A metodologia adotada segue o padrão ágil, onde as histórias de usuário são
 
 #### Critérios de Aceitação
 
-[ ] O processamento do modelo de linguagem (LLM) que atua como DLP deve ser realizado estritamente pelo Ollama hospedado em ambiente local.
-[ ] O script Python não deve realizar requisições HTTP para APIs externas (ex: OpenAI, Google Cloud, AWS) durante o fluxo de mensageria e inspeção.
+- [x] O processamento do modelo de linguagem (LLM) que atua como DLP deve ser realizado estritamente pelo Ollama hospedado em ambiente local.
+- [x] O script Python não deve realizar requisições HTTP para APIs externas (ex: OpenAI, Google Cloud, AWS) durante o fluxo de mensageria e inspeção.
